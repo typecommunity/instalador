@@ -1,3 +1,9 @@
-deploy_password=
-mysql_root_password=
-db_pass=12345@@Mudar
+deploy_password=123456
+mysql_root_password=123456
+db_pass=
+redis_pass=ZdG387FShYsm0SaaSoRlSAAsme09a754s1DHMSsIdS=
+jwt_secret=3123123213123
+jwt_refresh_secret=75756756756
+deploy_email=admin@admin.com
+db_user=root
+db_name=whaticket

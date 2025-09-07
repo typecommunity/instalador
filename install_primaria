@@ -87,9 +87,20 @@ printf "${WHITE} 🚀 FASE 3: Criando usuário deploy...${GRAY_LIGHT}\n\n"
 # Verificar se o usuário já existe
 if ! id "deploy" &>/dev/null; then
     printf "${YELLOW} Criando novo usuário deploy...${GRAY_LIGHT}\n"
-    useradd -m -p $(openssl passwd -crypt ${mysql_root_password}) -s /bin/bash deploy
+    
+    # Criar senha criptografada corretamente
+    ENCRYPTED_PASSWORD=$(perl -e 'print crypt($ARGV[0], "password")' ${mysql_root_password})
+    
+    # Criar usuário com senha
+    useradd -m -p "$ENCRYPTED_PASSWORD" -s /bin/bash deploy
+    
+    # Adicionar aos grupos necessários
     usermod -aG sudo deploy
     usermod -aG docker deploy
+    
+    # Alternativa: definir senha usando chpasswd
+    echo "deploy:${mysql_root_password}" | chpasswd
+    
     printf "${GREEN} Usuário deploy criado com sucesso!${GRAY_LIGHT}\n"
 else
     printf "${YELLOW} Usuário deploy já existe...${GRAY_LIGHT}\n"
@@ -97,11 +108,25 @@ else
 fi
 
 # Verificar se o usuário foi criado
+if ! id "deploy" &>/dev/null; then
+    printf "${RED} Erro ao criar usuário deploy!${NC}\n"
+    printf "${YELLOW} Criando usuário manualmente...${NC}\n"
+    
+    # Método alternativo mais simples
+    useradd -m -s /bin/bash deploy
+    echo "deploy:${mysql_root_password}" | chpasswd
+    usermod -aG sudo deploy
+    usermod -aG docker deploy
+fi
+
+# Verificação final
 id deploy
 if [ $? -ne 0 ]; then
-    printf "${RED} Erro ao criar usuário deploy!${NC}\n"
+    printf "${RED} Falha crítica ao criar usuário deploy!${NC}\n"
     exit 1
 fi
+
+printf "${GREEN} Usuário deploy configurado com sucesso!${GRAY_LIGHT}\n"
 
 #######################################
 # FASE 4: INSTALAR OUTRAS DEPENDÊNCIAS

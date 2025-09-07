@@ -37,6 +37,27 @@ source "${PROJECT_ROOT}"/config
 # CORREÇÕES DIRETAS NO SCRIPT
 #######################################
 
+# Função corrigida para criar usuário - EXECUTAR PRIMEIRO
+system_create_user_fixed() {
+  print_banner
+  printf "${WHITE} 💻 Criando usuário deploy...${GRAY_LIGHT}"
+  printf "\n\n"
+
+  sleep 2
+
+  # Verificar se o usuário já existe
+  if ! id "deploy" &>/dev/null; then
+    printf "${YELLOW} Criando novo usuário deploy...${GRAY_LIGHT}\n"
+    useradd -m -p $(openssl passwd -crypt ${mysql_root_password}) -s /bin/bash -G sudo deploy
+    usermod -aG sudo deploy
+    printf "${GREEN} Usuário deploy criado com sucesso!${GRAY_LIGHT}\n"
+  else
+    printf "${YELLOW} Usuário deploy já existe, pulando criação...${GRAY_LIGHT}\n"
+  fi
+
+  sleep 2
+}
+
 # Função corrigida para criar banco de dados
 backend_redis_create_fixed() {
   print_banner
@@ -45,11 +66,11 @@ backend_redis_create_fixed() {
 
   sleep 2
 
-  # Criar container Redis
-  sudo su - root <<EOF
+  # Adicionar deploy ao grupo docker
   usermod -aG docker deploy
+
+  # Criar container Redis
   docker run --name redis-${instancia_add} -p ${redis_port}:6379 --restart always --detach redis redis-server --requirepass ${mysql_root_password}
-EOF
 
   sleep 2
 
@@ -75,7 +96,6 @@ backend_nginx_setup_fixed() {
   backend_hostname=$(echo "${backend_url/https:\/\/}")
   backend_hostname=$(echo "${backend_hostname/http:\/\/}")
 
-  sudo su - root <<EOF
 cat > /etc/nginx/sites-available/${instancia_add}-backend <<END
 server {
   server_name ${backend_hostname};
@@ -83,19 +103,18 @@ server {
   location / {
     proxy_pass http://127.0.0.1:${backend_port};
     proxy_http_version 1.1;
-    proxy_set_header Upgrade \\\$http_upgrade;
+    proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection 'upgrade';
-    proxy_set_header Host \\\$host;
-    proxy_set_header X-Real-IP \\\$remote_addr;
-    proxy_set_header X-Forwarded-Proto \\\$scheme;
-    proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
-    proxy_cache_bypass \\\$http_upgrade;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_cache_bypass \$http_upgrade;
   }
 }
 END
 
-ln -sf /etc/nginx/sites-available/${instancia_add}-backend /etc/nginx/sites-enabled/${instancia_add}-backend
-EOF
+  ln -sf /etc/nginx/sites-available/${instancia_add}-backend /etc/nginx/sites-enabled/${instancia_add}-backend
 
   sleep 2
 }
@@ -111,7 +130,6 @@ frontend_nginx_setup_fixed() {
   frontend_hostname=$(echo "${frontend_url/https:\/\/}")
   frontend_hostname=$(echo "${frontend_hostname/http:\/\/}")
 
-  sudo su - root <<EOF
 cat > /etc/nginx/sites-available/${instancia_add}-frontend <<END
 server {
   server_name ${frontend_hostname};
@@ -119,31 +137,28 @@ server {
   location / {
     proxy_pass http://127.0.0.1:${frontend_port};
     proxy_http_version 1.1;
-    proxy_set_header Upgrade \\\$http_upgrade;
+    proxy_set_header Upgrade \$http_upgrade;
     proxy_set_header Connection 'upgrade';
-    proxy_set_header Host \\\$host;
-    proxy_set_header X-Real-IP \\\$remote_addr;
-    proxy_set_header X-Forwarded-Proto \\\$scheme;
-    proxy_set_header X-Forwarded-For \\\$proxy_add_x_forwarded_for;
-    proxy_cache_bypass \\\$http_upgrade;
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_cache_bypass \$http_upgrade;
   }
 }
 END
 
-ln -sf /etc/nginx/sites-available/${instancia_add}-frontend /etc/nginx/sites-enabled/${instancia_add}-frontend
-EOF
+  ln -sf /etc/nginx/sites-available/${instancia_add}-frontend /etc/nginx/sites-enabled/${instancia_add}-frontend
 
   sleep 2
 }
 
 # Função para garantir que os diretórios do nginx existem
 ensure_nginx_directories() {
-  sudo su - root <<EOF
   # Criar diretórios se não existirem
   [ ! -d "/etc/nginx/sites-available" ] && mkdir -p /etc/nginx/sites-available
   [ ! -d "/etc/nginx/sites-enabled" ] && mkdir -p /etc/nginx/sites-enabled
   [ ! -d "/etc/nginx/conf.d" ] && mkdir -p /etc/nginx/conf.d
-EOF
 }
 
 # Função corrigida para instalar Node e PostgreSQL
@@ -154,9 +169,8 @@ system_node_install_fixed() {
 
   sleep 2
 
-  sudo su - root <<EOF
   # Instalar Node.js
-  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
   apt-get install -y nodejs
   
   sleep 2
@@ -168,7 +182,7 @@ system_node_install_fixed() {
   
   # Instalar PostgreSQL
   apt-get install -y wget ca-certificates
-  sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt \$(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+  sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
   wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
   apt-get update -y 
   apt-get -y install postgresql postgresql-contrib
@@ -181,31 +195,6 @@ system_node_install_fixed() {
   
   # Configurar timezone
   timedatectl set-timezone America/Sao_Paulo
-EOF
-
-  sleep 2
-}
-
-# Função corrigida para criar usuário
-system_create_user_fixed() {
-  print_banner
-  printf "${WHITE} 💻 Criando usuário deploy...${GRAY_LIGHT}"
-  printf "\n\n"
-
-  sleep 2
-
-  # Verificar se o usuário já existe
-  if ! id "deploy" &>/dev/null; then
-    sudo su - root <<EOF
-    useradd -m -p \$(openssl passwd -crypt ${mysql_root_password}) -s /bin/bash -G sudo deploy
-    usermod -aG sudo deploy
-EOF
-  else
-    printf "${YELLOW} Usuário deploy já existe, pulando criação...${GRAY_LIGHT}\n"
-  fi
-
-  # Garantir que deploy está no grupo docker
-  sudo usermod -aG docker deploy 2>/dev/null || true
 
   sleep 2
 }
@@ -216,6 +205,12 @@ EOF
 
 # interactive CLI
 inquiry_options
+
+#######################################
+# FASE 1: INSTALAÇÃO DE DEPENDÊNCIAS (COMO ROOT)
+#######################################
+print_banner
+printf "${WHITE} 🚀 FASE 1: Instalando dependências do sistema...${GRAY_LIGHT}\n\n"
 
 # dependencies related
 system_update
@@ -231,8 +226,20 @@ ensure_nginx_directories
 
 system_certbot_install
 
-# system config
-system_create_user_fixed  # Usando a versão corrigida
+#######################################
+# FASE 2: CRIAR USUÁRIO DEPLOY (COMO ROOT)
+#######################################
+print_banner
+printf "${WHITE} 🚀 FASE 2: Configurando usuário do sistema...${GRAY_LIGHT}\n\n"
+
+# CRIAR O USUÁRIO ANTES DE USÁ-LO
+system_create_user_fixed
+
+#######################################
+# FASE 3: CONFIGURAÇÃO DA APLICAÇÃO (USANDO DEPLOY)
+#######################################
+print_banner
+printf "${WHITE} 🚀 FASE 3: Instalando aplicação Whaticket...${GRAY_LIGHT}\n\n"
 
 # backend related
 system_git_clone
@@ -243,13 +250,21 @@ backend_node_build
 backend_db_migrate
 backend_db_seed
 backend_start_pm2
-backend_nginx_setup_fixed  # Usando a versão corrigida
 
 # frontend related
 frontend_set_env
 frontend_node_dependencies
 frontend_node_build
 frontend_start_pm2
+
+#######################################
+# FASE 4: CONFIGURAÇÃO DE REDE (COMO ROOT)
+#######################################
+print_banner
+printf "${WHITE} 🚀 FASE 4: Configurando servidor web...${GRAY_LIGHT}\n\n"
+
+# Configurar nginx (executar como root, não como deploy)
+backend_nginx_setup_fixed  # Usando a versão corrigida
 frontend_nginx_setup_fixed  # Usando a versão corrigida
 
 # network related
@@ -257,10 +272,22 @@ system_nginx_conf
 system_nginx_restart
 system_certbot_setup
 
-# Mensagem final
+#######################################
+# FINALIZAÇÃO
+#######################################
 print_banner
 printf "${GREEN} ✅ Instalação concluída com sucesso!${NC}\n"
 printf "${WHITE} Acesse:${NC}\n"
 printf "${CYAN_LIGHT} Frontend: ${frontend_url}${NC}\n"
 printf "${CYAN_LIGHT} Backend: ${backend_url}${NC}\n"
+printf "\n"
+printf "${YELLOW} Informações importantes:${NC}\n"
+printf "${WHITE} Usuário: deploy${NC}\n"
+printf "${WHITE} Senha: ${mysql_root_password}${NC}\n"
+printf "\n"
+printf "${YELLOW} Verificar status dos serviços:${NC}\n"
+printf "${WHITE} systemctl status postgresql${NC}\n"
+printf "${WHITE} systemctl status nginx${NC}\n"
+printf "${WHITE} docker ps${NC}\n"
+printf "${WHITE} sudo su - deploy -c 'pm2 list'${NC}\n"
 printf "\n"
